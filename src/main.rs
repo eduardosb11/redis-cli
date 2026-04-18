@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
 fn main() {
@@ -17,6 +17,15 @@ fn main() {
 }
 
 fn handle_client(mut stream: TcpStream) {
-    let pong = b"+PONG\r\n";
-    stream.write_all(pong).expect("Failed to write to stream");
+    let mut buffer = vec![0; 512];
+    loop {
+        let bytes_read = stream
+            .read(&mut buffer)
+            .expect("Failed to read from stream");
+        if bytes_read == 0 {
+            break;
+        }
+        let pong = b"+PONG\r\n";
+        stream.write_all(pong).expect("Failed to write to stream");
+    }
 }

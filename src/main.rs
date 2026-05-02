@@ -1,31 +1,43 @@
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").expect("Could not bind to port");
+    listener
+        .set_nonblocking(true)
+        .expect("Cannot set non-blocking");
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                handle_client(stream);
+    let mut clients: Vec<TcpStream> = Vec::new();
+
+    loop {
+        match listener.accept() {
+            Ok((stream, _addr)) => {
+                stream
+                    .set_nonblocking(true)
+                    .expect("set_nonblocking call failed");
+                clients.push(stream);
             }
-            Err(e) => {
-                println!("error: {}", { e });
-            }
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {}
+            Err(_e) => {}
+        }
+
+        for mut client in &clients {
+            handle_client(&mut client);
         }
     }
 }
 
-fn handle_client(mut stream: TcpStream) {
+fn handle_client(mut stream: &TcpStream) {
     let mut buffer = vec![0; 512];
-    loop {
-        let bytes_read = stream
-            .read(&mut buffer)
-            .expect("Failed to read from stream");
-        if bytes_read == 0 {
-            break;
+    let pong = b"+PONG\r\n";
+    match stream.read(&mut buffer) {
+        Ok(0) => {
+            return;
         }
-        let pong = b"+PONG\r\n";
-        stream.write_all(pong).expect("Failed to write to stream");
+        Ok(_) => {
+            stream.write_all(pong).expect("Failed to write");
+        }
+        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
+        Err(_) => {}
     }
 }
